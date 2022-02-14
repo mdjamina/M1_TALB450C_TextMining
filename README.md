@@ -1,2 +1,2 @@
-# TextMining
-TALB450C - Extraction d'informations
+# Text Mining
+# TALB450C - Extraction d'informations
