@@ -1,4 +1,4 @@
-from cProfile import label
+
 import numpy as np
 import csv
 import treetaggerwrapper as ttw
@@ -15,7 +15,7 @@ import string
 import spacy
 from spacy import displacy
 
-nlp = spacy.load('fr_core_news_lg')
+
 #
 def load_corpus(path_file,path_corpus) -> dict:
     """Chargement des fichiers et des annotations:
@@ -66,14 +66,11 @@ def words_frequency(words):
     return nltk.FreqDist([w for w in words])
 
 
-
-
-def most_common_words(words, n):
+def most_common_words(words, n=3):
 
     occ = words_frequency(words)
 
     return occ.most_common(n)
-
 
 
 def trigramme(words):
@@ -89,10 +86,28 @@ def concat_docs_by_label(labels:list,docs:list):
     
     return data
 
+
+nlp = spacy.load('fr_core_news_lg')
+
 def get_ner(text):
     doc = nlp(text)
     return [x.text for x in doc.ents if x.label_ in ['ORG','PER','LOC']]
       
+
+def get_avr_len_doc_by_label(labels,docs):
+
+    data = {}
+    count_docs = {}
+
+    for cls,doc in zip(labels,docs):
+        words =list(tokenization(doc))[0]
+        count_docs[cls] = count_docs.get(cls,0) + 1
+        data[cls] = data.get(cls,0) + len(words) 
+    
+    for cls,n in count_docs.items():
+        data[cls] = round(data[cls] / n,2)
+
+    return data
 
 
 
@@ -108,6 +123,7 @@ def main():
 
 
     stopwords = load_stopwords(path_stopwords_file)
+
     punctuations = string.punctuation + '’«»'
 
      
@@ -118,7 +134,7 @@ def main():
     data_most_common_by_labels = {}
     data_most_common_lemma_by_labels = {}
     data_most_common_trigram_by_labels = {}
-    data_most_common_enr_by_labels = {}
+    data_most_common_entity_by_labels = {}
     data_avr_docs_len_by_labels ={}
 
 
@@ -138,10 +154,12 @@ def main():
 
         #Entités nommées les plus fréquentes pour chaque
         #classe (PER-ORG-LOC uniquement)
-        data_most_common_enr_by_labels[cls] = most_common_words(get_ner(doc),5)
+        data_most_common_entity_by_labels[cls] = most_common_words(get_ner(doc),5)
 
-        #Longueur moyenne d’un document p/chaque classe
-        data_avr_docs_len_by_labels[cls] = data_avr_docs_len_by_labels.get(cls,0) + len(words) / len(dev_corpus)
+    
+    
+    #Longueur moyenne d’un document p/chaque classe
+    data_avr_docs_len_by_labels = get_avr_len_doc_by_label(dev_labels,dev_corpus)
 
 
         
@@ -154,7 +172,7 @@ def main():
 
 
        
-    pp.pprint(data_most_common_lemma_by_labels)
+    pp.pprint(data_avr_docs_len_by_labels)
 
 
     
