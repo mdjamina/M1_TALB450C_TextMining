@@ -20,7 +20,7 @@ def load_corpus(path_file) -> dict:
     return corpus
 
 
-def train_test_split(data:dict, test_size:int=10,dev_size:int=None):
+def train_test_split(path_file_tsv, test_size:int=10,dev_size:int=10):
     """
     Divisez le corpus en sous-ensembles d'entraînement, de développement et de test aléatoires.
 
@@ -40,6 +40,19 @@ def train_test_split(data:dict, test_size:int=10,dev_size:int=None):
 
     """
 
+    data={}
+
+
+    #chargement du fichier des annotations
+    with open(path_file_tsv, 'r') as tsvfile:
+      reader = csv.reader(tsvfile, delimiter='\t')
+      next(reader, None) 
+      for row in reader:    
+        value = row[0].split()[1].strip()
+        key = row[1].strip()
+        data[key] = data.get(key,[]) +  [value]
+
+
     # échantillonnage des données
 
     # corpus d'entrainnement 
@@ -56,11 +69,12 @@ def train_test_split(data:dict, test_size:int=10,dev_size:int=None):
   
         #pour chaque classe
         #calcul du nombre du document de 10%
-        n = round( len(lst_docs)*test_size/100) 
+        n_test = round( len(lst_docs)*test_size/100) 
+        n_dev = round( len(lst_docs)*dev_size/100) 
         #print('classe:',classe,' tot doc=',len(lst_docs),' n=',n)
 
         #selection aléatoire des n doc_id 
-        x = list( np.random.choice(lst_docs, n, replace=False))
+        x = list( np.random.choice(lst_docs, n_test, replace=False))
 
         #ajout de la classe et l'échantillon doc_id dans le corpus de dev
         test[classe] = x
@@ -68,10 +82,14 @@ def train_test_split(data:dict, test_size:int=10,dev_size:int=None):
         # suppression des doc_id déjà selectionnés
         lst_docs = list(set(lst_docs) - set(x))
 
-        if dev_size is not None:
+        if dev_size != None:
+
+            #calcul du nombre du document de 10%
+            
+
   
             #selection aléatoire des n doc_id 
-            x = list(np.random.choice(lst_docs, n, replace=False))
+            x = list(np.random.choice(lst_docs, n_dev, replace=False))
 
             #ajout de la classe et l'échantillon doc_id dans le corpus de test
             dev[classe] = x
@@ -82,9 +100,17 @@ def train_test_split(data:dict, test_size:int=10,dev_size:int=None):
 
         #ajout du reste des doc_ids (80%) dans le corpus train
         train[classe] = lst_docs
+
+
+    outputfile = path_file_tsv.split('.')[0] + '_{}.txt'
+
+    dict_to_file(train,outputfile.format('train'))
+    dict_to_file(test,outputfile.format('test'))
+    dict_to_file(dev,outputfile.format('dev'))
     
 
     return (train,test,dev)
+
 
 
 def get_text_by_doc_id(doc_id, directory) -> str:
