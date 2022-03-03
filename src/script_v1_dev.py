@@ -1,141 +1,177 @@
+from cProfile import label
 import numpy as np
 import csv
+import treetaggerwrapper as ttw
+import pprint as pp
+
+import nltk
+#nltk.download('punkt')
 
 
+from nltk.probability import FreqDist
+import string
 
-def load_annotations(path_file) -> dict:
-    """
-        Chargement du fichier des annotations csv
-    """
 
-    #Initialisation du dictionnaire qui contient des annotations:
-    corpus = {}
+import spacy
+from spacy import displacy
 
-    with open(path_file, 'r') as tsvfile:
-        reader = csv.reader(tsvfile, delimiter='\t')
-        next(reader, None)
-        for row in reader:
-            key = row[0].split()[1].strip()
-            value = row[1].strip()
-            corpus[key] = value
-    
-    return corpus
-
+nlp = spacy.load('fr_core_news_lg')
 #
-def load_corpus(path_file) -> dict:
-    """Chargement du fichier des annotations:
+def load_corpus(path_file,path_corpus) -> dict:
+    """Chargement des fichiers et des annotations:
     """
-    
+
     #Initialisation du dictionnaire qui contient des annotations:
-    corpus = {}
+    corpus = []
+    labels = []
 
     with open(path_file, 'r') as tsvfile:
         reader = csv.reader(tsvfile, delimiter='\t')
         next(reader, None)
         for row in reader:
-            value = row[0].split()[1].strip()
-            key = row[1]
-            corpus[key] = corpus.get(key,[]) +  [value]
+            doc_id = row[0].split()[1].strip()
+            doc = get_text_by_doc_id(doc_id,path_corpus)
 
-    return corpus
+            labels.append(row[1])
+            corpus.append(doc)
 
-
-def train_test_split(data:dict, test_size:int=10,dev_size:int=None):
-    """
-    Divisez le corpus en sous-ensembles d'entraînement, de développement et de test aléatoires.
+    return corpus,labels
 
 
-    Parameters
-    ----------
-    data: le corpus
 
-    test_size: int, default=10
-        représente le percentage d'échantillons de test.
+def get_text_by_doc_id(doc_id, path_corpus) -> str:
 
-    dev_size: int, default=None
-        représente le percentage d'échantillons de dev.
-        Si (dev_size=None) => train_size = 100-(test_size)
-        Sinon train_size = 100 - (test_size + dev_size)
-
-
-    """
-
-    # échantillonnage des données
-
-    # corpus d'entrainnement 
-    train ={}
-
-    # corpus du dev 
-    dev = {}
-
-    # corpus du teste 
-    test = {}
-
-
-    for classe,lst_docs in data.items():
-  
-        #pour chaque classe
-        #calcul du nombre du document de 10%
-        n = round( len(lst_docs)*test_size/100) 
-        #print('classe:',classe,' tot doc=',len(lst_docs),' n=',n)
-
-        #selection aléatoire des n doc_id 
-        x = list( np.random.choice(lst_docs, n, replace=False))
-
-        #ajout de la classe et l'échantillon doc_id dans le corpus de dev
-        test[classe] = x
-
-        # suppression des doc_id déjà selectionnés
-        lst_docs = list(set(lst_docs) - set(x))
-
-        if dev_size is not None:
-  
-            #selection aléatoire des n doc_id 
-            x = list(np.random.choice(lst_docs, n, replace=False))
-
-            #ajout de la classe et l'échantillon doc_id dans le corpus de test
-            dev[classe] = x
-
-            # suppression des doc_id déjà selectionnés
-            lst_docs = list(set(lst_docs) - set(x))
-
-
-        #ajout du reste des doc_ids (80%) dans le corpus train
-        train[classe] = lst_docs
-    
-
-    return (train,test,dev)
-
-
-def get_text_by_doc_id(doc_id, directory) -> str:
-
-    with open(directory+doc_id+'.txt','r',encoding='utf8') as doc:
+    with open(path_corpus+doc_id+'.txt','r',encoding='utf8') as doc:
         return doc.read()
 
 
-def get_text(list_doc_id:list, directory) -> str:
+def load_stopwords(path_file):
+    """https://countwordsfree.com/stopwords/french
+    """
+    with open(path_file,'r',encoding='utf8') as csvfile:
+        return [w.strip() for w in csvfile]
+
+
+def tokenization(text,lang='fr',stopwords=[], punctuations='' ):
+
+    tagger = ttw.TreeTagger(TAGLANG=lang)
+
+    tags = tagger.tag_text(text.replace('’',"'"))
+   
+    return zip(*[tag.split() for tag in tags if tag.split()[2] not in stopwords and tag.split()[2] not in punctuations ] )   
+
+
+        
+def words_frequency(words):
+    return nltk.FreqDist([w for w in words])
+
+
+
+
+def most_common_words(words, n):
+
+    occ = words_frequency(words)
+
+    return occ.most_common(n)
+
+
+
+def trigramme(words):
+    return [(i,j,k) for (i,j,k) in zip(*[words[i:] for i in range(3)])]
+
+
+def concat_docs_by_label(labels:list,docs:list):
+
+    data = {}
+
+    for label,doc in zip(labels,docs):
+        data[label] = data.get(label,'')+ '\n' + doc
     
-    return '\n'.join([get_text_by_doc_id(doc_id,directory) for doc_id in list_doc_id ])
-     
+    return data
+
+def get_ner(text):
+    doc = nlp(text)
+    return [x.text for x in doc.ents if x.label_ in ['ORG','PER','LOC']]
+      
+
+
 
 def main():
     #nom du fichier annotations corpus (dev)
     path_corpus_dir = './content/corpus/'
-    #path_file_tsv = './content/annotation_corpus.tsv'
 
-    #corpus = load_corpus(path_file_tsv)
-
-    #(corpus_train,corpus_test,corpus_dev) = train_test_split(corpus,dev_size=10)
+    path_stopwords_file = './content/stop_words_french.txt'
 
     path_file_tsv_dev = './content/annotation_corpus_dev.tsv'
 
-    corpus_dev = load_corpus(path_file_tsv_dev)
+    dev_corpus, dev_labels = load_corpus(path_file_tsv_dev,path_corpus_dir)
 
-    print(corpus_dev)
- 
-    text = get_text(corpus_dev['politique'],path_corpus_dir)
 
-    print(text[:500])
+    stopwords = load_stopwords(path_stopwords_file)
+    punctuations = string.punctuation + '’«»'
+
+     
+
+    data = concat_docs_by_label(dev_labels,dev_corpus)
+
+
+    data_most_common_by_labels = {}
+    data_most_common_lemma_by_labels = {}
+    data_most_common_trigram_by_labels = {}
+    data_most_common_enr_by_labels = {}
+    data_avr_docs_len_by_labels ={}
+
+
+    for cls,doc in data.items():
+        words,pos,lemma =list(tokenization(doc,stopwords=stopwords,punctuations=punctuations))
+
+        #3 mots les plus fréquents (hors stopwords) 
+        data_most_common_by_labels[cls] = most_common_words(words,3)
+
+        #Lemmes les plus fréquents pour chaque classe
+        data_most_common_lemma_by_labels[cls] = most_common_words(lemma,5)
+
+        words =list(tokenization(doc))[0]
+
+        #5 trigrammes les plus fréquents pour chaque classe
+        data_most_common_trigram_by_labels[cls] = most_common_words(trigramme(words),5)
+
+        #Entités nommées les plus fréquentes pour chaque
+        #classe (PER-ORG-LOC uniquement)
+        data_most_common_enr_by_labels[cls] = most_common_words(get_ner(doc),5)
+
+        #Longueur moyenne d’un document p/chaque classe
+        data_avr_docs_len_by_labels[cls] = data_avr_docs_len_by_labels.get(cls,0) + len(words) / len(dev_corpus)
+
+
+        
+
+
+
+
+
+    
+
+
+       
+    pp.pprint(data_most_common_lemma_by_labels)
+
+
+    
+
+    
+    
+
+
+
+
+
+    
+
+
+
+
+
 
 
 if __name__ == "__main__":
